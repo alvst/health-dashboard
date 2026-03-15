@@ -1,7 +1,6 @@
 /**
  * Import all Rythm CSV blood work reports into the database.
- * Usage: npx tsx scripts/import-bloodwork.ts [directory]
- * Default directory: ~/Downloads/rythm-all-csv-reports-cohen
+ * Usage: npx tsx scripts/import-bloodwork.ts /path/to/csv/folder
  */
 
 import Database from "better-sqlite3";
@@ -9,9 +8,13 @@ import path from "path";
 import fs from "fs";
 
 const DB_PATH = path.join(process.cwd(), "health.db");
-const DEFAULT_DIR = path.join(process.env.HOME || "~", "Downloads/rythm-all-csv-reports-cohen");
 
-const dir = process.argv[2] || DEFAULT_DIR;
+const dir = process.argv[2];
+
+if (!dir) {
+  console.error("Usage: npx tsx scripts/import-bloodwork.ts /path/to/csv/folder");
+  process.exit(1);
+}
 
 if (!fs.existsSync(dir)) {
   console.error(`Directory not found: ${dir}`);
