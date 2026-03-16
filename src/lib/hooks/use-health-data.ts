@@ -1,5 +1,5 @@
 import useSWR, { preload } from "swr";
-import type { DailyLog, WeightEntry, BloodResult, SyncStatus, WhoopStatus, WithingsStatus, SourceSetting } from "@/lib/types";
+import type { DailyLog, WeightEntry, BloodResult, SyncStatus, SourceSetting } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -36,17 +36,15 @@ export function useBloodwork() {
 }
 
 export function useSyncStatus() {
-  return useSWR<SyncStatus>("/api/oura-auth", fetcher);
-}
-
-export function useWhoopStatus() {
-  return useSWR<WhoopStatus>("/api/whoop-auth", fetcher);
-}
-
-export function useWithingsStatus() {
-  return useSWR<WithingsStatus>("/api/withings-auth", fetcher);
+  return useSWR<SyncStatus>("/api/status", fetcher);
 }
 
 export function useSources() {
   return useSWR<SourceSetting[]>("/api/sources", fetcher);
+}
+
+export function useServices() {
+  const { data, mutate } = useSWR<SourceSetting[]>("/api/sources", fetcher);
+  const services = data ? Object.fromEntries(data.map((s) => [s.source, s.enabled])) : null;
+  return { data: services as Record<string, boolean> | null, mutate };
 }

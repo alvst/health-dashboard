@@ -62,19 +62,13 @@ export interface BloodResult {
 
 export interface SyncStatus {
   oura_connected: boolean;
-  last_oura_sync: string | null;
-  last_chrono_sync: string | null;
-  last_ladder_sync: string | null;
-}
-
-export interface WhoopStatus {
   whoop_connected: boolean;
-  last_whoop_sync: string | null;
-}
-
-export interface WithingsStatus {
   withings_connected: boolean;
+  last_oura_sync: string | null;
+  last_whoop_sync: string | null;
+  last_chrono_sync: string | null;
   last_withings_sync: string | null;
+  last_ladder_sync: string | null;
 }
 
 export interface SourceSetting {

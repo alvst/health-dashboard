@@ -1,39 +1,34 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSyncStatus, useWhoopStatus, useWithingsStatus, useSources, useDailyLogs } from "@/lib/hooks/use-health-data";
+import { useSyncStatus, useServices, useDailyLogs } from "@/lib/hooks/use-health-data";
 
 export function SettingsView() {
-  const { data: status, mutate } = useSyncStatus();
-  const { data: whoopStatus, mutate: mutateWhoop } = useWhoopStatus();
-  const { data: withingsStatus, mutate: mutateWithings } = useWithingsStatus();
-  const { data: sources, mutate: mutateSources } = useSources();
+  const { data: status, mutate: mutateStatus } = useSyncStatus();
+  const { data: services, mutate: mutateServices } = useServices();
   const { mutate: mutateLogs } = useDailyLogs();
   const [syncingOura, setSyncingOura] = useState(false);
-  const [syncingChrono, setSyncingChrono] = useState(false);
-  const [syncingLadder, setSyncingLadder] = useState(false);
   const [syncingWhoop, setSyncingWhoop] = useState(false);
   const [syncingWithings, setSyncingWithings] = useState(false);
+  const [syncingChrono, setSyncingChrono] = useState(false);
+  const [syncingLadder, setSyncingLadder] = useState(false);
   const [seeding, setSeeding] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
-  function isEnabled(src: string) {
-    return sources?.find((s) => s.source === src)?.enabled ?? true;
-  }
+  const isEnabled = (service: string) => !services || services[service] !== false;
 
-  const toggleSource = useCallback(async (src: string, enabled: boolean) => {
+  const toggleService = useCallback(async (service: string, enabled: boolean) => {
     await fetch("/api/sources", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: src, enabled }),
+      body: JSON.stringify({ source: service, enabled }),
     });
-    mutateSources();
+    mutateServices();
     mutateLogs();
-  }, [mutateSources, mutateLogs]);
+  }, [mutateServices, mutateLogs]);
 
   const seedTest = useCallback(async (src: string) => {
-    setSeeding(src);
-    setResult(null);
+    setSeeding(src); setResult(null);
     try {
       const res = await fetch("/api/seed-test", {
         method: "POST",
@@ -43,11 +38,8 @@ export function SettingsView() {
       const data = await res.json();
       setResult(data.error ? data.error : `Loaded ${data.days} days of test data for ${src}`);
       mutateLogs();
-    } catch {
-      setResult(`Failed to seed ${src} test data`);
-    } finally {
-      setSeeding(null);
-    }
+    } catch { setResult(`Failed to seed ${src} test data`); }
+    finally { setSeeding(null); }
   }, [mutateLogs]);
 
   const connectOura = useCallback(() => { window.location.href = "/api/oura-auth"; }, []);
@@ -60,21 +52,25 @@ export function SettingsView() {
       const res = await fetch("/api/sync-oura", { method: "POST" });
       const data = await res.json();
       setResult(data.error ? `Oura: ${data.error}` : "Oura synced");
-      mutate(); mutateLogs();
+      mutateStatus(); mutateLogs();
     } catch { setResult("Oura sync failed"); }
     finally { setSyncingOura(false); }
-  }, [mutate, mutateLogs]);
+  }, [mutateStatus, mutateLogs]);
 
-  const syncWhoop = useCallback(async () => {
+  const syncWhoop = useCallback(async (days = 3) => {
     setSyncingWhoop(true); setResult(null);
     try {
-      const res = await fetch("/api/sync-whoop", { method: "POST" });
+      const res = await fetch("/api/sync-whoop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days }),
+      });
       const data = await res.json();
-      setResult(data.error ? `Whoop: ${data.error}` : `Whoop synced${data.synced?.length ? ` (${data.synced.length} days)` : ""}`);
-      mutateWhoop(); mutateLogs();
+      setResult(data.error ? `Whoop: ${data.error}` : `Whoop synced (${data.synced?.length ?? 0} days)`);
+      mutateStatus(); mutateLogs();
     } catch { setResult("Whoop sync failed"); }
     finally { setSyncingWhoop(false); }
-  }, [mutateWhoop, mutateLogs]);
+  }, [mutateStatus, mutateLogs]);
 
   const syncWithings = useCallback(async () => {
     setSyncingWithings(true); setResult(null);
@@ -82,10 +78,10 @@ export function SettingsView() {
       const res = await fetch("/api/sync-withings", { method: "POST" });
       const data = await res.json();
       setResult(data.error ? `Withings: ${data.error}` : `Withings synced${data.synced?.length ? ` (${data.synced.length} days)` : ""}`);
-      mutateWithings(); mutateLogs();
+      mutateStatus(); mutateLogs();
     } catch { setResult("Withings sync failed"); }
     finally { setSyncingWithings(false); }
-  }, [mutateWithings, mutateLogs]);
+  }, [mutateStatus, mutateLogs]);
 
   const syncChrono = useCallback(async () => {
     setSyncingChrono(true); setResult(null);
@@ -98,14 +94,17 @@ export function SettingsView() {
     finally { setSyncingChrono(false); }
   }, [mutateLogs]);
 
-  const syncLadder = useCallback(async () => {
+  const syncLadder = useCallback(async (mode: "scan" | "rescan") => {
     setSyncingLadder(true); setResult(null);
     try {
-      const res = await fetch("/api/sync-ladder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "scan" }) });
+      const res = await fetch("/api/sync-ladder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
       const data = await res.json();
-      if (data.error) { setResult(`Ladder: ${data.error}`); }
-      else {
-        const msg = data.processed?.length ? `Ladder: ${data.processed.length} workout${data.processed.length > 1 ? "s" : ""} synced` : "Ladder: no new screenshots";
+      if (data.error) {
+        setResult(`Ladder: ${data.error}`);
+      } else {
+        const count = data.processed?.length ?? 0;
+        const label = mode === "rescan" ? "reprocessed" : "synced";
+        const msg = count ? `Ladder: ${count} workout${count > 1 ? "s" : ""} ${label}` : `Ladder: no ${mode === "rescan" ? "" : "new "}screenshots`;
         setResult(data.errors?.length ? `${msg} (${data.errors.length} errors)` : msg);
       }
       mutateLogs();
@@ -113,126 +112,168 @@ export function SettingsView() {
     finally { setSyncingLadder(false); }
   }, [mutateLogs]);
 
-  const reprocessLadder = useCallback(async () => {
-    setSyncingLadder(true); setResult(null);
-    try {
-      const res = await fetch("/api/sync-ladder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "rescan" }) });
-      const data = await res.json();
-      if (data.error) { setResult(`Ladder: ${data.error}`); }
-      else {
-        const msg = data.processed?.length ? `Ladder: reprocessed ${data.processed.length} workout${data.processed.length > 1 ? "s" : ""}` : "Ladder: no screenshots found";
-        setResult(data.errors?.length ? `${msg} (${data.errors.length} errors)` : msg);
-      }
-      mutateLogs();
-    } catch { setResult("Ladder rescan failed"); }
-    finally { setSyncingLadder(false); }
-  }, [mutateLogs]);
-
   return (
-    <div style={{ maxWidth: 480 }} className="space-y-6">
+    <div style={{ maxWidth: 520 }} className="space-y-4">
       {result && (
-        <div className="rounded-lg px-3 py-2 text-[12px]" style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-color)", color: "var(--text-secondary)" }}>
+        <div className="rounded-lg px-3 py-2 text-[12px]"
+          style={{ background: "var(--bg-tertiary)", border: "1px solid var(--border-color)", color: "var(--text-secondary)" }}>
           {result}
         </div>
       )}
 
-      {/* Oura */}
-      <Section title="Oura Ring" source="oura" enabled={isEnabled("oura")} onToggle={toggleSource}>
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: status?.oura_connected ? "var(--positive)" : "var(--negative)" }} />
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{status?.oura_connected ? "Connected" : "Not connected"}</span>
+      {/* Oura Ring */}
+      <Section title="Oura Ring" enabled={isEnabled("oura")} onToggle={e => toggleService("oura", e)}>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Syncs sleep, readiness, steps, and active calories via OAuth.
+        </p>
+        <div className="flex items-center gap-3 mb-3">
+          <Dot on={!!status?.oura_connected} />
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            {status?.oura_connected ? "Connected" : "Not connected"}
+          </span>
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <SettingsButton onClick={connectOura}>{status?.oura_connected ? "Reconnect" : "Connect Oura"}</SettingsButton>
-          {status?.oura_connected && <SettingsButton onClick={syncOura} disabled={syncingOura}>{syncingOura ? "Syncing..." : "Sync Now"}</SettingsButton>}
-          <SettingsButton onClick={() => seedTest("oura")} disabled={seeding === "oura"}>{seeding === "oura" ? "Loading..." : "Load Test Data"}</SettingsButton>
+        <div className="flex gap-2 flex-wrap">
+          <SettingsButton onClick={connectOura} disabled={!isEnabled("oura")}>
+            {status?.oura_connected ? "Reconnect" : "Connect Oura"}
+          </SettingsButton>
+          {status?.oura_connected && (
+            <SettingsButton onClick={syncOura} disabled={syncingOura || !isEnabled("oura")}>
+              {syncingOura ? "Syncing..." : "Sync Now"}
+            </SettingsButton>
+          )}
+          <SettingsButton onClick={() => seedTest("oura")} disabled={seeding === "oura" || !isEnabled("oura")}>
+            {seeding === "oura" ? "Loading..." : "Load Test Data"}
+          </SettingsButton>
         </div>
-        {status?.last_oura_sync && <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_oura_sync}</div>}
+        {status?.last_oura_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_oura_sync}</div>
+        )}
       </Section>
 
       {/* Whoop */}
-      <Section title="Whoop" source="whoop" enabled={isEnabled("whoop")} onToggle={toggleSource}>
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: whoopStatus?.whoop_connected ? "var(--positive)" : "var(--negative)" }} />
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{whoopStatus?.whoop_connected ? "Connected" : "Not connected"}</span>
+      <Section title="Whoop" enabled={isEnabled("whoop")} onToggle={e => toggleService("whoop", e)}>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Syncs sleep, recovery score, strain, HRV, and workout calories via OAuth. Whoop limits historical data to the last 30 days.
+        </p>
+        <div className="flex items-center gap-3 mb-3">
+          <Dot on={!!status?.whoop_connected} />
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            {status?.whoop_connected ? "Connected" : "Not connected"}
+          </span>
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <SettingsButton onClick={connectWhoop}>{whoopStatus?.whoop_connected ? "Reconnect" : "Connect Whoop"}</SettingsButton>
-          {whoopStatus?.whoop_connected && <SettingsButton onClick={syncWhoop} disabled={syncingWhoop}>{syncingWhoop ? "Syncing..." : "Sync Now"}</SettingsButton>}
-          <SettingsButton onClick={() => seedTest("whoop")} disabled={seeding === "whoop"}>{seeding === "whoop" ? "Loading..." : "Load Test Data"}</SettingsButton>
+        <div className="flex gap-2 flex-wrap">
+          <SettingsButton onClick={connectWhoop} disabled={!isEnabled("whoop")}>
+            {status?.whoop_connected ? "Reconnect" : "Connect Whoop"}
+          </SettingsButton>
+          {status?.whoop_connected && (<>
+            <SettingsButton onClick={() => syncWhoop(3)} disabled={syncingWhoop || !isEnabled("whoop")}>
+              {syncingWhoop ? "Syncing..." : "Sync Now"}
+            </SettingsButton>
+            <SettingsButton onClick={() => syncWhoop(30)} disabled={syncingWhoop || !isEnabled("whoop")}>
+              30-Day Sync
+            </SettingsButton>
+          </>)}
+          <SettingsButton onClick={() => seedTest("whoop")} disabled={seeding === "whoop" || !isEnabled("whoop")}>
+            {seeding === "whoop" ? "Loading..." : "Load Test Data"}
+          </SettingsButton>
         </div>
-        {whoopStatus?.last_whoop_sync && <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {whoopStatus.last_whoop_sync}</div>}
+        {status?.last_whoop_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_whoop_sync}</div>
+        )}
       </Section>
 
       {/* Withings */}
-      <Section title="Withings" source="withings" enabled={isEnabled("withings")} onToggle={toggleSource}>
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: withingsStatus?.withings_connected ? "var(--positive)" : "var(--negative)" }} />
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{withingsStatus?.withings_connected ? "Connected" : "Not connected"}</span>
+      <Section title="Withings" enabled={isEnabled("withings")} onToggle={e => toggleService("withings", e)}>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Syncs weight, body fat, and muscle mass from Withings smart scales via OAuth.
+        </p>
+        <div className="flex items-center gap-3 mb-3">
+          <Dot on={!!status?.withings_connected} />
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            {status?.withings_connected ? "Connected" : "Not connected"}
+          </span>
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <SettingsButton onClick={connectWithings}>{withingsStatus?.withings_connected ? "Reconnect" : "Connect Withings"}</SettingsButton>
-          {withingsStatus?.withings_connected && <SettingsButton onClick={syncWithings} disabled={syncingWithings}>{syncingWithings ? "Syncing..." : "Sync Now"}</SettingsButton>}
-          <SettingsButton onClick={() => seedTest("withings")} disabled={seeding === "withings"}>{seeding === "withings" ? "Loading..." : "Load Test Data"}</SettingsButton>
+        <div className="flex gap-2 flex-wrap">
+          <SettingsButton onClick={connectWithings} disabled={!isEnabled("withings")}>
+            {status?.withings_connected ? "Reconnect" : "Connect Withings"}
+          </SettingsButton>
+          {status?.withings_connected && (
+            <SettingsButton onClick={syncWithings} disabled={syncingWithings || !isEnabled("withings")}>
+              {syncingWithings ? "Syncing..." : "Sync Now"}
+            </SettingsButton>
+          )}
+          <SettingsButton onClick={() => seedTest("withings")} disabled={seeding === "withings" || !isEnabled("withings")}>
+            {seeding === "withings" ? "Loading..." : "Load Test Data"}
+          </SettingsButton>
         </div>
-        {withingsStatus?.last_withings_sync && <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {withingsStatus.last_withings_sync}</div>}
+        {status?.last_withings_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_withings_sync}</div>
+        )}
       </Section>
 
       {/* Chronometer */}
-      <Section title="Chronometer" source="chronometer" enabled={isEnabled("chronometer")} onToggle={toggleSource}>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>Syncs food calories, macros, and water intake</div>
+      <Section title="Chronometer" enabled={isEnabled("chronometer")} onToggle={e => toggleService("chronometer", e)}>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Scrapes food calories, macros, and water intake using your login credentials.
+        </p>
         <div className="flex gap-2 flex-wrap">
-          <SettingsButton onClick={syncChrono} disabled={syncingChrono}>{syncingChrono ? "Scraping..." : "Sync Now"}</SettingsButton>
-          <SettingsButton onClick={() => seedTest("chronometer")} disabled={seeding === "chronometer"}>{seeding === "chronometer" ? "Loading..." : "Load Test Data"}</SettingsButton>
+          <SettingsButton onClick={syncChrono} disabled={syncingChrono || !isEnabled("chronometer")}>
+            {syncingChrono ? "Scraping..." : "Sync Now"}
+          </SettingsButton>
+          <SettingsButton onClick={() => seedTest("chronometer")} disabled={seeding === "chronometer" || !isEnabled("chronometer")}>
+            {seeding === "chronometer" ? "Loading..." : "Load Test Data"}
+          </SettingsButton>
         </div>
-        {status?.last_chrono_sync && <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_chrono_sync}</div>}
+        {status?.last_chrono_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_chrono_sync}</div>
+        )}
       </Section>
 
       {/* Ladder */}
-      <Section title="Ladder" source="ladder" enabled={isEnabled("ladder")} onToggle={toggleSource}>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
-          Scans workout screenshots from iCloud &rarr; Workout Pics folder.
+      <Section title="Ladder" enabled={isEnabled("ladder")} onToggle={e => toggleService("ladder", e)}>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Scans workout screenshots from iCloud &rarr; Workout Pics folder.{" "}
           {process.env.NEXT_PUBLIC_GEMINI_CONFIGURED === "1"
-            ? <span style={{ color: "var(--accent)", marginLeft: 6 }}>Using Gemini Vision</span>
-            : <span style={{ color: "var(--text-muted)", marginLeft: 6 }}>Using Tesseract OCR (add GEMINI_API_KEY to .env for better results)</span>
+            ? <span style={{ color: "var(--accent)" }}>Using Gemini Vision</span>
+            : <span style={{ color: "var(--text-muted)" }}>Using Tesseract OCR (add GEMINI_API_KEY for better results)</span>
           }
-        </div>
+        </p>
         <div className="flex gap-2 flex-wrap">
-          <SettingsButton onClick={syncLadder} disabled={syncingLadder}>{syncingLadder ? "Scanning..." : "Sync New"}</SettingsButton>
-          <SettingsButton onClick={reprocessLadder} disabled={syncingLadder}>Reprocess All</SettingsButton>
-          <SettingsButton onClick={() => seedTest("ladder")} disabled={seeding === "ladder"}>{seeding === "ladder" ? "Loading..." : "Load Test Data"}</SettingsButton>
+          <SettingsButton onClick={() => syncLadder("scan")} disabled={syncingLadder || !isEnabled("ladder")}>
+            {syncingLadder ? "Scanning..." : "Sync New"}
+          </SettingsButton>
+          <SettingsButton onClick={() => syncLadder("rescan")} disabled={syncingLadder || !isEnabled("ladder")}>
+            Reprocess All
+          </SettingsButton>
+          <SettingsButton onClick={() => seedTest("ladder")} disabled={seeding === "ladder" || !isEnabled("ladder")}>
+            {seeding === "ladder" ? "Loading..." : "Load Test Data"}
+          </SettingsButton>
         </div>
-        {status?.last_ladder_sync && <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_ladder_sync}</div>}
+        {status?.last_ladder_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_ladder_sync}</div>
+        )}
       </Section>
     </div>
   );
 }
 
-function Section({
-  title,
-  source,
-  enabled,
-  onToggle,
-  children,
-}: {
-  title: string;
-  source: string;
-  enabled: boolean;
-  onToggle: (src: string, enabled: boolean) => void;
-  children: React.ReactNode;
+function Dot({ on }: { on: boolean }) {
+  return <div className="w-2 h-2 rounded-full" style={{ background: on ? "var(--positive)" : "var(--negative)" }} />;
+}
+
+function Section({ title, enabled, onToggle, children }: {
+  title: string; enabled: boolean; onToggle: (v: boolean) => void; children: React.ReactNode;
 }) {
   return (
-    <div
-      className="rounded-lg p-4"
-      style={{
-        background: "var(--bg-primary)",
-        border: "1px solid var(--border-color)",
-        opacity: enabled ? 1 : 0.6,
-      }}
-    >
+    <div className="rounded-lg p-4" style={{
+      background: "var(--bg-primary)",
+      border: "1px solid var(--border-color)",
+      opacity: enabled ? 1 : 0.5,
+      transition: "opacity 0.2s",
+    }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{title}</div>
-        <Toggle enabled={enabled} onChange={(v) => onToggle(source, v)} />
+        <Toggle enabled={enabled} onChange={onToggle} />
       </div>
       {enabled && children}
       {!enabled && (
@@ -253,26 +294,24 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
         height: 20,
         borderRadius: 10,
         border: "none",
-        cursor: "pointer",
+        background: enabled ? "var(--accent)" : "var(--bg-tertiary)",
         position: "relative",
-        background: enabled ? "var(--accent, #4ade80)" : "var(--border-color)",
-        transition: "background 0.15s",
+        cursor: "pointer",
+        transition: "background 0.2s",
         flexShrink: 0,
       }}
       aria-label={enabled ? "Disable source" : "Enable source"}
     >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 19 : 3,
-          width: 14,
-          height: 14,
-          borderRadius: "50%",
-          background: "white",
-          transition: "left 0.15s",
-        }}
-      />
+      <span style={{
+        position: "absolute",
+        top: 3,
+        left: enabled ? 18 : 3,
+        width: 14,
+        height: 14,
+        borderRadius: "50%",
+        background: "#fff",
+        transition: "left 0.2s",
+      }} />
     </button>
   );
 }
