@@ -381,18 +381,134 @@ function CalBalanceChart({ logs }: { logs: DailyLog[] }) {
 function buildSparklines(logs: DailyLog[]) {
   const sorted = logs.toSorted((a, b) => a.day.localeCompare(b.day));
   const last7 = sorted.slice(-7);
-  const build = (fn: (l: DailyLog) => number | null) => {
-    const f = last7.filter(l => fn(l) != null);
+  const last14 = sorted.slice(-14);
+  const build = (arr: DailyLog[], fn: (l: DailyLog) => number | null) => {
+    const f = arr.filter(l => fn(l) != null);
     return { data: f.map(l => fn(l)!), labels: f.map(l => l.day.slice(5)) };
   };
   return {
-    sleep: build(l => l.sleep_hours),
-    recovery: build(l => l.readiness_score),
-    steps: build(l => l.steps),
-    protein: build(l => l.protein_g),
-    weight: build(l => l.weight_lbs),
-    activeCal: build(l => l.active_calories),
+    sleep: build(last7, l => l.sleep_hours),
+    recovery: build(last7, l => l.readiness_score),
+    steps: build(last7, l => l.steps),
+    protein: build(last7, l => l.protein_g),
+    weight: build(last7, l => l.weight_lbs ?? (l.withings_weight_kg ? Math.round(l.withings_weight_kg * 2.20462 * 10) / 10 : null)),
+    activeCal: build(last7, l => l.active_calories),
+    whoopRecovery: build(last14, l => l.whoop_recovery_score),
+    whoopStrain: build(last14, l => l.whoop_strain),
+    whoopHrv: build(last14, l => l.whoop_hrv),
+    withingsWeight: build(last14, l => l.withings_weight_kg ? Math.round(l.withings_weight_kg * 2.20462 * 10) / 10 : null),
+    withingsFat: build(last14, l => l.withings_fat_pct),
+    withingsMuscle: build(last14, l => l.withings_muscle_kg),
   };
+}
+
+// --- Whoop & Withings cards ---
+
+function WhoopRecoveryCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+  const score = d.whoop_recovery_score ?? null;
+  const color = score == null ? "#555" : score >= 67 ? "var(--accent)" : score >= 34 ? "#f0c040" : "var(--negative)";
+  return (
+    <div style={CARD}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>Whoop Recovery</div>
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1 }}>{score ?? "--"}</span>
+        <span style={{ fontSize: 14, color: "#555" }}>%</span>
+      </div>
+      {d.whoop_sleep_performance != null && (
+        <div style={{ fontSize: 11, color: "#666", marginTop: 3 }}>Sleep perf {d.whoop_sleep_performance}%</div>
+      )}
+      <div style={{ marginTop: "auto" }}>
+        <Spark data={spark.data} labels={spark.labels} color={color} yLabels={false} />
+      </div>
+    </div>
+  );
+}
+
+function WhoopStrainCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+  const strain = d.whoop_strain ?? null;
+  const color = strain == null ? "#555" : strain >= 14 ? "var(--negative)" : strain >= 10 ? "#f0c040" : "var(--accent)";
+  return (
+    <div style={CARD}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>Whoop Strain</div>
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1 }}>{strain?.toFixed(1) ?? "--"}</span>
+        <span style={{ fontSize: 14, color: "#555" }}>/21</span>
+      </div>
+      <div style={{ marginTop: "auto" }}>
+        <Bars data={spark.data} labels={spark.labels} color={color} unit="" yLabels={false} />
+      </div>
+    </div>
+  );
+}
+
+function WhoopHrvCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+  return (
+    <div style={CARD}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>HRV / RHR</div>
+      <div className="flex items-baseline gap-2 mt-2">
+        <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--blue)", lineHeight: 1 }}>{d.whoop_hrv?.toFixed(0) ?? "--"}</span>
+        <span style={{ fontSize: 14, color: "#555" }}>ms</span>
+      </div>
+      {d.whoop_rhr != null && (
+        <div style={{ fontSize: 11, color: "#666", marginTop: 3 }}>Resting HR {d.whoop_rhr} bpm</div>
+      )}
+      <div style={{ marginTop: "auto" }}>
+        <Spark data={spark.data} labels={spark.labels} color="var(--blue)" unit="ms" yLabels={false} />
+      </div>
+    </div>
+  );
+}
+
+function WithingsWeightCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+  const kg = d.withings_weight_kg ?? null;
+  const lbs = kg != null ? Math.round(kg * 2.20462 * 10) / 10 : null;
+  return (
+    <div style={CARD}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>Withings Weight</div>
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--blue)", lineHeight: 1 }}>{lbs ?? "--"}</span>
+        <span style={{ fontSize: 14, color: "#555" }}>lbs</span>
+      </div>
+      {kg != null && <div style={{ fontSize: 11, color: "#666", marginTop: 3 }}>{kg.toFixed(1)} kg</div>}
+      <div style={{ marginTop: "auto" }}>
+        <Spark data={spark.data} labels={spark.labels} color="var(--blue)" unit=" lbs" yLabels={false} />
+      </div>
+    </div>
+  );
+}
+
+function WithingsBodyCompCard({ d, fatSpark, muscleSpark }: {
+  d: Partial<DailyLog>;
+  fatSpark: { data: number[]; labels: string[] };
+  muscleSpark: { data: number[]; labels: string[] };
+}) {
+  return (
+    <div style={CARD}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>Body Fat</div>
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "#fb923c", lineHeight: 1 }}>{d.withings_fat_pct?.toFixed(1) ?? "--"}</span>
+        <span style={{ fontSize: 14, color: "#555" }}>%</span>
+      </div>
+      <div style={{ marginTop: "auto" }}>
+        <Spark data={fatSpark.data} labels={fatSpark.labels} color="#fb923c" unit="%" yLabels={false} />
+      </div>
+    </div>
+  );
+}
+
+function WithingsMuscleCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+  return (
+    <div style={CARD}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>Muscle Mass</div>
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{d.withings_muscle_kg?.toFixed(1) ?? "--"}</span>
+        <span style={{ fontSize: 14, color: "#555" }}>kg</span>
+      </div>
+      <div style={{ marginTop: "auto" }}>
+        <Spark data={spark.data} labels={spark.labels} color="var(--accent)" unit="kg" yLabels={false} />
+      </div>
+    </div>
+  );
 }
 
 // --- Main ---
@@ -420,6 +536,11 @@ export function DashboardView() {
   const isToday = selectedDay === localToday();
 
   const s = useMemo(() => buildSparklines(all), [all]);
+
+  const hasWhoop = d.whoop_recovery_score != null || d.whoop_strain != null || d.whoop_hrv != null
+    || s.whoopRecovery.data.length > 0 || s.whoopStrain.data.length > 0;
+  const hasWithings = d.withings_weight_kg != null || d.withings_fat_pct != null
+    || s.withingsWeight.data.length > 0 || s.withingsFat.data.length > 0;
 
   const weightTrend = useMemo(() => {
     const rw = all.filter(l => l.weight_lbs).toSorted((a, b) => b.day.localeCompare(a.day)).slice(0, 7);
@@ -592,6 +713,30 @@ export function DashboardView() {
         <WeightChart logs={all} />
         <CalBalanceChart logs={all} />
       </div>
+
+      {/* Whoop section */}
+      {hasWhoop && (
+        <>
+          <div style={{ fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Whoop</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "280px", gap: 14 }}>
+            <WhoopRecoveryCard d={d} spark={s.whoopRecovery} />
+            <WhoopStrainCard d={d} spark={s.whoopStrain} />
+            <WhoopHrvCard d={d} spark={s.whoopHrv} />
+          </div>
+        </>
+      )}
+
+      {/* Withings section */}
+      {hasWithings && (
+        <>
+          <div style={{ fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Withings</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "280px", gap: 14 }}>
+            <WithingsWeightCard d={d} spark={s.withingsWeight} />
+            <WithingsBodyCompCard d={d} fatSpark={s.withingsFat} muscleSpark={s.withingsMuscle} />
+            <WithingsMuscleCard d={d} spark={s.withingsMuscle} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
