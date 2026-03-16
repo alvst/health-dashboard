@@ -1,18 +1,39 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSyncStatus } from "@/lib/hooks/use-health-data";
+import { useSyncStatus, useWhoopStatus } from "@/lib/hooks/use-health-data";
 
 export function SettingsView() {
   const { data: status, mutate } = useSyncStatus();
+  const { data: whoopStatus, mutate: mutateWhoop } = useWhoopStatus();
   const [syncingOura, setSyncingOura] = useState(false);
   const [syncingChrono, setSyncingChrono] = useState(false);
   const [syncingLadder, setSyncingLadder] = useState(false);
+  const [syncingWhoop, setSyncingWhoop] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
   const connectOura = useCallback(() => {
     window.location.href = "/api/oura-auth";
   }, []);
+
+  const connectWhoop = useCallback(() => {
+    window.location.href = "/api/whoop-auth";
+  }, []);
+
+  const syncWhoop = useCallback(async () => {
+    setSyncingWhoop(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/sync-whoop", { method: "POST" });
+      const data = await res.json();
+      setResult(data.error ? `Whoop: ${data.error}` : `Whoop synced${data.synced?.length ? ` (${data.synced.length} days)` : ""}`);
+      mutateWhoop();
+    } catch {
+      setResult("Whoop sync failed");
+    } finally {
+      setSyncingWhoop(false);
+    }
+  }, [mutateWhoop]);
 
   const syncOura = useCallback(async () => {
     setSyncingOura(true);
@@ -165,6 +186,34 @@ export function SettingsView() {
         {status?.last_ladder_sync && (
           <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
             Last sync: {status.last_ladder_sync}
+          </div>
+        )}
+      </Section>
+
+      {/* Whoop */}
+      <Section title="Whoop">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ background: whoopStatus?.whoop_connected ? "var(--positive)" : "var(--negative)" }}
+          />
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            {whoopStatus?.whoop_connected ? "Connected" : "Not connected"}
+          </span>
+        </div>
+        <div className="flex gap-2 mt-3">
+          <SettingsButton onClick={connectWhoop}>
+            {whoopStatus?.whoop_connected ? "Reconnect" : "Connect Whoop"}
+          </SettingsButton>
+          {whoopStatus?.whoop_connected && (
+            <SettingsButton onClick={syncWhoop} disabled={syncingWhoop}>
+              {syncingWhoop ? "Syncing..." : "Sync Now"}
+            </SettingsButton>
+          )}
+        </div>
+        {whoopStatus?.last_whoop_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Last sync: {whoopStatus.last_whoop_sync}
           </div>
         )}
       </Section>

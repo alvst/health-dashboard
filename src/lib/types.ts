@@ -20,6 +20,12 @@ export interface DailyLog {
   oura_synced_at: string | null;
   chrono_synced_at: string | null;
   ladder_synced_at: string | null;
+  whoop_recovery_score: number | null;
+  whoop_strain: number | null;
+  whoop_hrv: number | null;
+  whoop_rhr: number | null;
+  whoop_sleep_performance: number | null;
+  whoop_synced_at: string | null;
   updated_at: string;
 }
 
@@ -52,4 +58,9 @@ export interface SyncStatus {
   last_oura_sync: string | null;
   last_chrono_sync: string | null;
   last_ladder_sync: string | null;
+}
+
+export interface WhoopStatus {
+  whoop_connected: boolean;
+  last_whoop_sync: string | null;
 }

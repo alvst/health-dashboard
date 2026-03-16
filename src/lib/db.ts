@@ -15,6 +15,14 @@ export function getDb(): Database.Database {
   return _db;
 }
 
+function addColumnIfMissing(db: Database.Database, table: string, column: string, type: string) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  } catch {
+    // column already exists
+  }
+}
+
 function initTables(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS daily_log (
@@ -69,5 +77,20 @@ function initTables(db: Database.Database) {
       uploaded_at TEXT DEFAULT (datetime('now')),
       UNIQUE(marker, test_date)
     );
+
+    CREATE TABLE IF NOT EXISTS whoop_auth (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      access_token TEXT,
+      refresh_token TEXT,
+      expires_at INTEGER,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
+
+  addColumnIfMissing(db, "daily_log", "whoop_recovery_score", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_strain", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_hrv", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_rhr", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_sleep_performance", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_synced_at", "TEXT");
 }

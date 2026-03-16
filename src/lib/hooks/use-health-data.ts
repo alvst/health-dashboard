@@ -1,5 +1,5 @@
 import useSWR, { preload } from "swr";
-import type { DailyLog, WeightEntry, BloodResult, SyncStatus } from "@/lib/types";
+import type { DailyLog, WeightEntry, BloodResult, SyncStatus, WhoopStatus } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -37,4 +37,8 @@ export function useBloodwork() {
 
 export function useSyncStatus() {
   return useSWR<SyncStatus>("/api/oura-auth", fetcher);
+}
+
+export function useWhoopStatus() {
+  return useSWR<WhoopStatus>("/api/whoop-auth", fetcher);
 }
