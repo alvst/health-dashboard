@@ -62,3 +62,8 @@ export interface WithingsStatus {
   withings_connected: boolean;
   last_withings_sync: string | null;
 }
+
+export interface SourceSetting {
+  source: string;
+  enabled: boolean;
+}

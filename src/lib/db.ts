@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
+import { ALL_SOURCES } from "./sources";
 
 const DB_PATH = path.join(process.cwd(), "health.db");
 
@@ -78,6 +79,14 @@ function initTables(db: Database.Database) {
       UNIQUE(marker, test_date)
     );
 
+    CREATE TABLE IF NOT EXISTS whoop_auth (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      access_token TEXT,
+      refresh_token TEXT,
+      expires_at INTEGER,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS withings_auth (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       access_token TEXT,
@@ -85,8 +94,25 @@ function initTables(db: Database.Database) {
       expires_at INTEGER,
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS source_settings (
+      source TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1
+    );
   `);
 
+  // Seed default source rows if missing
+  const insertSource = db.prepare(
+    "INSERT OR IGNORE INTO source_settings (source, enabled) VALUES (?, 1)"
+  );
+  for (const src of ALL_SOURCES) insertSource.run(src);
+
+  addColumnIfMissing(db, "daily_log", "whoop_recovery_score", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_strain", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_hrv", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_rhr", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_sleep_performance", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_synced_at", "TEXT");
   addColumnIfMissing(db, "daily_log", "withings_weight_kg", "REAL");
   addColumnIfMissing(db, "daily_log", "withings_fat_pct", "REAL");
   addColumnIfMissing(db, "daily_log", "withings_muscle_kg", "REAL");
