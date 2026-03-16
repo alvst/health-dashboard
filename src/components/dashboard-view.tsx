@@ -13,40 +13,41 @@ const SOURCE_COLOR: Record<string, string> = {
   ladder: "#a78bfa",
 };
 
-function SourceBadge({ sources, enabled }: { sources: string[]; enabled: Set<string> }) {
+function SourceBadge({ sources, enabled }: { sources: string[]; enabled: Set<string> | null }) {
   const [hovered, setHovered] = useState(false);
-  const active = sources.filter(s => enabled.has(s));
+  // null means still loading — show all as enabled so dots are always visible
+  const active = enabled === null ? sources : sources.filter(s => enabled.has(s));
   if (active.length === 0) return null;
   return (
     <div
-      style={{ position: "relative", display: "flex", alignItems: "center", gap: 3, cursor: "default" }}
+      style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, cursor: "default" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {active.map(s => (
-        <span
+        <div
           key={s}
-          style={{ width: 6, height: 6, borderRadius: "50%", background: SOURCE_COLOR[s] ?? "#555", display: "inline-block", flexShrink: 0 }}
+          style={{ width: 7, height: 7, borderRadius: "50%", background: SOURCE_COLOR[s] ?? "#555", flexShrink: 0 }}
         />
       ))}
       {hovered && (
         <div style={{
-          position: "absolute",
-          top: "calc(100% + 6px)",
-          right: 0,
+          position: "fixed",
+          marginTop: 24,
           background: "#1a1a1a",
-          border: "1px solid #2a2a2a",
+          border: "1px solid #333",
           borderRadius: 6,
-          padding: "5px 8px",
+          padding: "5px 9px",
           fontSize: 11,
           color: "#aaa",
           whiteSpace: "nowrap",
-          zIndex: 10,
+          zIndex: 9999,
           pointerEvents: "none",
+          transform: "translateX(-50%)",
         }}>
           {active.map((s, i) => (
             <span key={s}>
-              {i > 0 && <span style={{ color: "#444", margin: "0 4px" }}>·</span>}
+              {i > 0 && <span style={{ color: "#555", margin: "0 4px" }}>·</span>}
               <span style={{ color: SOURCE_COLOR[s] ?? "#aaa" }}>{s}</span>
             </span>
           ))}
@@ -237,7 +238,7 @@ const MacroBar = memo(function MacroBar({ label, value, target, color }: { label
 
 // --- Weight input card ---
 function WeightCard({ today, weightTrend, sparkData, sparkLabels, defaultDay, enabledSources }: {
-  today: Partial<DailyLog>; weightTrend: number | null; sparkData: number[]; sparkLabels: string[]; defaultDay?: string; enabledSources: Set<string>;
+  today: Partial<DailyLog>; weightTrend: number | null; sparkData: number[]; sparkLabels: string[]; defaultDay?: string; enabledSources: Set<string> | null;
 }) {
   const [wt, setWt] = useState("");
   const [day, setDay] = useState(defaultDay || localToday);
@@ -458,7 +459,7 @@ function buildSparklines(logs: DailyLog[]) {
 
 // --- Whoop & Withings cards ---
 
-function WhoopRecoveryCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
+function WhoopRecoveryCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> | null }) {
   const score = d.whoop_recovery_score ?? null;
   const color = score == null ? "#555" : score >= 67 ? "var(--accent)" : score >= 34 ? "#f0c040" : "var(--negative)";
   return (
@@ -481,7 +482,7 @@ function WhoopRecoveryCard({ d, spark, enabledSources }: { d: Partial<DailyLog>;
   );
 }
 
-function WhoopStrainCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
+function WhoopStrainCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> | null }) {
   const strain = d.whoop_strain ?? null;
   const color = strain == null ? "#555" : strain >= 14 ? "var(--negative)" : strain >= 10 ? "#f0c040" : "var(--accent)";
   return (
@@ -501,7 +502,7 @@ function WhoopStrainCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; s
   );
 }
 
-function WhoopHrvCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
+function WhoopHrvCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> | null }) {
   return (
     <div style={CARD}>
       <div className="flex items-center justify-between">
@@ -522,7 +523,7 @@ function WhoopHrvCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spar
   );
 }
 
-function WithingsWeightCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
+function WithingsWeightCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> | null }) {
   const kg = d.withings_weight_kg ?? null;
   const lbs = kg != null ? Math.round(kg * 2.20462 * 10) / 10 : null;
   return (
@@ -547,7 +548,7 @@ function WithingsBodyCompCard({ d, fatSpark, muscleSpark, enabledSources }: {
   d: Partial<DailyLog>;
   fatSpark: { data: number[]; labels: string[] };
   muscleSpark: { data: number[]; labels: string[] };
-  enabledSources: Set<string>;
+  enabledSources: Set<string> | null;
 }) {
   return (
     <div style={CARD}>
@@ -566,7 +567,7 @@ function WithingsBodyCompCard({ d, fatSpark, muscleSpark, enabledSources }: {
   );
 }
 
-function WithingsMuscleCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
+function WithingsMuscleCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> | null }) {
   return (
     <div style={CARD}>
       <div className="flex items-center justify-between">
@@ -608,7 +609,10 @@ export function DashboardView() {
   const all = logs || [];
   const d = dayData || ({} as Partial<DailyLog>);
   const isToday = selectedDay === localToday();
-  const enabledSources = useMemo(() => new Set((sourceList ?? []).filter(s => s.enabled).map(s => s.source)), [sourceList]);
+  const enabledSources = useMemo<Set<string> | null>(() => {
+    if (!sourceList) return null; // still loading — badge treats null as "show all"
+    return new Set(sourceList.filter(s => s.enabled).map(s => s.source));
+  }, [sourceList]);
 
   const s = useMemo(() => buildSparklines(all), [all]);
 
