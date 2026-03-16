@@ -112,6 +112,9 @@ function initTables(db: Database.Database) {
   addColumnIfMissing(db, "daily_log", "whoop_hrv", "REAL");
   addColumnIfMissing(db, "daily_log", "whoop_rhr", "REAL");
   addColumnIfMissing(db, "daily_log", "whoop_sleep_performance", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_sleep_hours", "REAL");
+  addColumnIfMissing(db, "daily_log", "whoop_workout_calories", "INTEGER");
+  addColumnIfMissing(db, "daily_log", "avg_hr", "INTEGER");
   addColumnIfMissing(db, "daily_log", "whoop_synced_at", "TEXT");
   addColumnIfMissing(db, "daily_log", "withings_weight_kg", "REAL");
   addColumnIfMissing(db, "daily_log", "withings_fat_pct", "REAL");

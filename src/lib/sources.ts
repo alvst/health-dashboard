@@ -16,6 +16,9 @@ export const SOURCE_COLUMNS: Record<string, string[]> = {
     "whoop_hrv",
     "whoop_rhr",
     "whoop_sleep_performance",
+    "whoop_sleep_hours",
+    "whoop_workout_calories",
+    "avg_hr",
   ],
   withings: [
     "withings_weight_kg",

@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 
-const WHOOP_API = "https://api.prod.whoop.com/developer";
+const WHOOP_API_V1 = "https://api.prod.whoop.com/developer/v1";
+const WHOOP_API_V2 = "https://api.prod.whoop.com/developer/v2";
 const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 
@@ -73,11 +74,11 @@ async function refreshToken(): Promise<string> {
   db.prepare(`
     UPDATE whoop_auth SET
       access_token = ?,
-      refresh_token = ?,
+      refresh_token = COALESCE(?, refresh_token),
       expires_at = ?,
       updated_at = datetime('now')
     WHERE id = 1
-  `).run(data.access_token, data.refresh_token, Math.floor(Date.now() / 1000) + data.expires_in);
+  `).run(data.access_token, data.refresh_token ?? null, Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600));
 
   return data.access_token;
 }
@@ -95,9 +96,10 @@ export async function getAccessToken(): Promise<string> {
   return row.access_token as string;
 }
 
-export async function whoopGet(path: string, params?: Record<string, string>) {
+export async function whoopGet(path: string, params?: Record<string, string>, version: "v1" | "v2" = "v2") {
   const token = await getAccessToken();
-  const url = new URL(WHOOP_API + path);
+  const base = version === "v2" ? WHOOP_API_V2 : WHOOP_API_V1;
+  const url = new URL(base + path);
   if (params) {
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   }
@@ -113,13 +115,13 @@ export async function whoopGet(path: string, params?: Record<string, string>) {
 }
 
 // Fetch all pages of a paginated Whoop endpoint
-export async function whoopGetAll(path: string, params: Record<string, string> = {}): Promise<Record<string, unknown>[]> {
+export async function whoopGetAll(path: string, params: Record<string, string> = {}, version: "v1" | "v2" = "v2"): Promise<Record<string, unknown>[]> {
   const records: Record<string, unknown>[] = [];
   let nextToken: string | null = null;
 
   do {
     const p = nextToken ? { ...params, nextToken } : params;
-    const data = await whoopGet(path, p);
+    const data = await whoopGet(path, p, version);
     const items = (data.records || []) as Record<string, unknown>[];
     records.push(...items);
     nextToken = (data.next_token as string) || null;
