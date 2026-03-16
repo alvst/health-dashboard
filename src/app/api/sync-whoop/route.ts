@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
     const endIso = `${today}T23:59:59.000Z`;
 
     const [recoveries, cycles, sleeps] = await Promise.all([
-      whoopGetAll("/v1/recovery", { start: startIso, end: endIso }),
-      whoopGetAll("/v1/cycle", { start: startIso, end: endIso }),
-      whoopGetAll("/v1/sleep", { start: startIso, end: endIso }),
+      whoopGetAll("/v2/recovery", { start: startIso, end: endIso }),
+      whoopGetAll("/v2/cycle", { start: startIso, end: endIso }),
+      whoopGetAll("/v2/activity/sleep", { start: startIso, end: endIso }),
     ]);
 
     // Key recovery by day
