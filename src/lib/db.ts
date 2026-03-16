@@ -78,7 +78,7 @@ function initTables(db: Database.Database) {
       UNIQUE(marker, test_date)
     );
 
-    CREATE TABLE IF NOT EXISTS whoop_auth (
+    CREATE TABLE IF NOT EXISTS withings_auth (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       access_token TEXT,
       refresh_token TEXT,
@@ -87,10 +87,8 @@ function initTables(db: Database.Database) {
     );
   `);
 
-  addColumnIfMissing(db, "daily_log", "whoop_recovery_score", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_strain", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_hrv", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_rhr", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_sleep_performance", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_synced_at", "TEXT");
+  addColumnIfMissing(db, "daily_log", "withings_weight_kg", "REAL");
+  addColumnIfMissing(db, "daily_log", "withings_fat_pct", "REAL");
+  addColumnIfMissing(db, "daily_log", "withings_muscle_kg", "REAL");
+  addColumnIfMissing(db, "daily_log", "withings_synced_at", "TEXT");
 }
