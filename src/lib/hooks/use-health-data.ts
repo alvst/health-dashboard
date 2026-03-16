@@ -44,7 +44,7 @@ export function useSources() {
 }
 
 export function useServices() {
-  const { data, mutate } = useSWR<SourceSetting[]>("/api/sources", fetcher);
+  const { data, mutate } = useSources();
   const services = data ? Object.fromEntries(data.map((s) => [s.source, s.enabled])) : null;
   return { data: services as Record<string, boolean> | null, mutate };
 }
