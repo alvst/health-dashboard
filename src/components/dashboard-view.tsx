@@ -1,9 +1,60 @@
 "use client";
 
 import { useState, useMemo, memo, useCallback } from "react";
-import { useDay, useDailyLogs, localToday } from "@/lib/hooks/use-health-data";
+import { useDay, useDailyLogs, useSources, localToday } from "@/lib/hooks/use-health-data";
 import { TARGETS } from "@/lib/constants";
 import type { DailyLog } from "@/lib/types";
+
+const SOURCE_COLOR: Record<string, string> = {
+  oura: "#22d3ee",
+  whoop: "#f87171",
+  withings: "#60a5fa",
+  chronometer: "#fb923c",
+  ladder: "#a78bfa",
+};
+
+function SourceBadge({ sources, enabled }: { sources: string[]; enabled: Set<string> }) {
+  const [hovered, setHovered] = useState(false);
+  const active = sources.filter(s => enabled.has(s));
+  if (active.length === 0) return null;
+  return (
+    <div
+      style={{ position: "relative", display: "flex", alignItems: "center", gap: 3, cursor: "default" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {active.map(s => (
+        <span
+          key={s}
+          style={{ width: 6, height: 6, borderRadius: "50%", background: SOURCE_COLOR[s] ?? "#555", display: "inline-block", flexShrink: 0 }}
+        />
+      ))}
+      {hovered && (
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 6px)",
+          right: 0,
+          background: "#1a1a1a",
+          border: "1px solid #2a2a2a",
+          borderRadius: 6,
+          padding: "5px 8px",
+          fontSize: 11,
+          color: "#aaa",
+          whiteSpace: "nowrap",
+          zIndex: 10,
+          pointerEvents: "none",
+        }}>
+          {active.map((s, i) => (
+            <span key={s}>
+              {i > 0 && <span style={{ color: "#444", margin: "0 4px" }}>·</span>}
+              <span style={{ color: SOURCE_COLOR[s] ?? "#aaa" }}>{s}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const CARD: React.CSSProperties = { background: "#111", borderRadius: 16, padding: "20px", border: "1px solid #1a1a1a", overflow: "hidden", display: "flex", flexDirection: "column" };
 
@@ -185,8 +236,8 @@ const MacroBar = memo(function MacroBar({ label, value, target, color }: { label
 });
 
 // --- Weight input card ---
-function WeightCard({ today, weightTrend, sparkData, sparkLabels, defaultDay }: {
-  today: Partial<DailyLog>; weightTrend: number | null; sparkData: number[]; sparkLabels: string[]; defaultDay?: string;
+function WeightCard({ today, weightTrend, sparkData, sparkLabels, defaultDay, enabledSources }: {
+  today: Partial<DailyLog>; weightTrend: number | null; sparkData: number[]; sparkLabels: string[]; defaultDay?: string; enabledSources: Set<string>;
 }) {
   const [wt, setWt] = useState("");
   const [day, setDay] = useState(defaultDay || localToday);
@@ -204,7 +255,10 @@ function WeightCard({ today, weightTrend, sparkData, sparkLabels, defaultDay }: 
 
   return (
     <div style={{ ...CARD, minHeight: 180 }}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>Weight</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Weight</span>
+        <SourceBadge sources={["withings"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-1 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{today.weight_lbs ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555", fontWeight: 500 }}>lbs</span>
@@ -404,12 +458,15 @@ function buildSparklines(logs: DailyLog[]) {
 
 // --- Whoop & Withings cards ---
 
-function WhoopRecoveryCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+function WhoopRecoveryCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
   const score = d.whoop_recovery_score ?? null;
   const color = score == null ? "#555" : score >= 67 ? "var(--accent)" : score >= 34 ? "#f0c040" : "var(--negative)";
   return (
     <div style={CARD}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>Whoop Recovery</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Whoop Recovery</span>
+        <SourceBadge sources={["whoop"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-1 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1 }}>{score ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555" }}>%</span>
@@ -424,12 +481,15 @@ function WhoopRecoveryCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: 
   );
 }
 
-function WhoopStrainCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+function WhoopStrainCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
   const strain = d.whoop_strain ?? null;
   const color = strain == null ? "#555" : strain >= 14 ? "var(--negative)" : strain >= 10 ? "#f0c040" : "var(--accent)";
   return (
     <div style={CARD}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>Whoop Strain</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Whoop Strain</span>
+        <SourceBadge sources={["whoop"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-1 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1 }}>{strain?.toFixed(1) ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555" }}>/21</span>
@@ -441,10 +501,13 @@ function WhoopStrainCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: nu
   );
 }
 
-function WhoopHrvCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+function WhoopHrvCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
   return (
     <div style={CARD}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>HRV / RHR</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>HRV / RHR</span>
+        <SourceBadge sources={["whoop"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-2 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--blue)", lineHeight: 1 }}>{d.whoop_hrv?.toFixed(0) ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555" }}>ms</span>
@@ -459,12 +522,15 @@ function WhoopHrvCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: numbe
   );
 }
 
-function WithingsWeightCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+function WithingsWeightCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
   const kg = d.withings_weight_kg ?? null;
   const lbs = kg != null ? Math.round(kg * 2.20462 * 10) / 10 : null;
   return (
     <div style={CARD}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>Withings Weight</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Withings Weight</span>
+        <SourceBadge sources={["withings"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-1 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--blue)", lineHeight: 1 }}>{lbs ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555" }}>lbs</span>
@@ -477,14 +543,18 @@ function WithingsWeightCard({ d, spark }: { d: Partial<DailyLog>; spark: { data:
   );
 }
 
-function WithingsBodyCompCard({ d, fatSpark, muscleSpark }: {
+function WithingsBodyCompCard({ d, fatSpark, muscleSpark, enabledSources }: {
   d: Partial<DailyLog>;
   fatSpark: { data: number[]; labels: string[] };
   muscleSpark: { data: number[]; labels: string[] };
+  enabledSources: Set<string>;
 }) {
   return (
     <div style={CARD}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>Body Fat</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Body Fat</span>
+        <SourceBadge sources={["withings"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-1 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "#fb923c", lineHeight: 1 }}>{d.withings_fat_pct?.toFixed(1) ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555" }}>%</span>
@@ -496,10 +566,13 @@ function WithingsBodyCompCard({ d, fatSpark, muscleSpark }: {
   );
 }
 
-function WithingsMuscleCard({ d, spark }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] } }) {
+function WithingsMuscleCard({ d, spark, enabledSources }: { d: Partial<DailyLog>; spark: { data: number[]; labels: string[] }; enabledSources: Set<string> }) {
   return (
     <div style={CARD}>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>Muscle Mass</div>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Muscle Mass</span>
+        <SourceBadge sources={["withings"]} enabled={enabledSources} />
+      </div>
       <div className="flex items-baseline gap-1 mt-2">
         <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{d.withings_muscle_kg?.toFixed(1) ?? "--"}</span>
         <span style={{ fontSize: 14, color: "#555" }}>kg</span>
@@ -531,9 +604,11 @@ export function DashboardView() {
   const [selectedDay, setSelectedDay] = useState(localToday);
   const { data: dayData } = useDay(selectedDay);
   const { data: logs } = useDailyLogs();
+  const { data: sourceList } = useSources();
   const all = logs || [];
   const d = dayData || ({} as Partial<DailyLog>);
   const isToday = selectedDay === localToday();
+  const enabledSources = useMemo(() => new Set((sourceList ?? []).filter(s => s.enabled).map(s => s.source)), [sourceList]);
 
   const s = useMemo(() => buildSparklines(all), [all]);
 
@@ -576,7 +651,10 @@ export function DashboardView() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "280px", gap: 14 }}>
       {/* Calories + macros — centered */}
       <div style={CARD}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Calories</div>
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Calories</span>
+          <SourceBadge sources={["chronometer"]} enabled={enabledSources} />
+        </div>
         <div className="flex items-center gap-4" style={{ margin: "auto 0" }}>
           <Ring value={d.food_calories || 0} max={TARGETS.calories} color="#fb923c" />
           <div className="flex-1 space-y-2">
@@ -592,7 +670,10 @@ export function DashboardView() {
 
       {/* Sleep */}
       <div style={CARD}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Sleep</div>
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Sleep</span>
+          <SourceBadge sources={["oura", "whoop"]} enabled={enabledSources} />
+        </div>
         <div className="flex items-baseline gap-1 mt-2">
           <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--blue)", lineHeight: 1 }}>{d.sleep_hours?.toFixed(1) || "--"}</span>
           <span style={{ fontSize: 14, color: "#555" }}>hrs</span>
@@ -605,7 +686,10 @@ export function DashboardView() {
 
       {/* Recovery */}
       <div style={CARD}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Recovery</div>
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Recovery</span>
+          <SourceBadge sources={["oura"]} enabled={enabledSources} />
+        </div>
         <div className="flex items-baseline gap-1 mt-2">
           <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: rc(d.readiness_score ?? null), lineHeight: 1 }}>{d.readiness_score ?? "--"}</span>
           <span style={{ fontSize: 14, color: "#555" }}>/100</span>
@@ -617,7 +701,10 @@ export function DashboardView() {
 
       {/* Steps */}
       <div style={CARD}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Steps</div>
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Steps</span>
+          <SourceBadge sources={["oura"]} enabled={enabledSources} />
+        </div>
         <div className="flex items-baseline gap-1 mt-2">
           <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{d.steps?.toLocaleString() || "--"}</span>
         </div>
@@ -628,9 +715,12 @@ export function DashboardView() {
 
       {/* Workout — ring + stats */}
       <div style={CARD}>
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between">
           <span style={{ fontSize: 14, fontWeight: 700 }}>Workout</span>
-          {d.workout_name ? <span style={{ fontSize: 11, color: "#444" }}>{d.workout_name}</span> : null}
+          <div className="flex items-center gap-2">
+            {d.workout_name ? <span style={{ fontSize: 11, color: "#444" }}>{d.workout_name}</span> : null}
+            <SourceBadge sources={["ladder"]} enabled={enabledSources} />
+          </div>
         </div>
         {d.workout_completed ? (
           <div className="flex items-center justify-center" style={{ margin: "auto 0" }}>
@@ -654,11 +744,14 @@ export function DashboardView() {
       </div>
 
       {/* Weight — with input */}
-      <WeightCard today={d} weightTrend={weightTrend} sparkData={s.weight.data} sparkLabels={s.weight.labels} defaultDay={selectedDay} />
+      <WeightCard today={d} weightTrend={weightTrend} sparkData={s.weight.data} sparkLabels={s.weight.labels} defaultDay={selectedDay} enabledSources={enabledSources} />
 
       {/* Active Calories */}
       <div style={CARD}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Active Calories</div>
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Active Calories</span>
+          <SourceBadge sources={["oura"]} enabled={enabledSources} />
+        </div>
         <div className="flex items-baseline gap-1 mt-2">
           <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{d.active_calories?.toLocaleString() || "--"}</span>
           <span style={{ fontSize: 14, color: "#555" }}>kcal</span>
@@ -670,9 +763,12 @@ export function DashboardView() {
 
       {/* Protein */}
       <div style={CARD}>
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between">
           <span style={{ fontSize: 14, fontWeight: 700 }}>Protein</span>
-          <span style={{ fontSize: 11, color: "#444" }}>target {TARGETS.protein_g}g</span>
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 11, color: "#444" }}>target {TARGETS.protein_g}g</span>
+            <SourceBadge sources={["chronometer"]} enabled={enabledSources} />
+          </div>
         </div>
         <div className="flex items-baseline gap-1 mt-2">
           <span className="tabular-nums" style={{ fontSize: 36, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{d.protein_g ? Math.round(d.protein_g) : "--"}</span>
@@ -685,9 +781,12 @@ export function DashboardView() {
 
       {/* Water — fill-up glass visual */}
       <div style={{ ...CARD, position: "relative" }}>
-        <div className="flex items-baseline justify-between" style={{ position: "relative", zIndex: 1 }}>
+        <div className="flex items-center justify-between" style={{ position: "relative", zIndex: 1 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>Water</span>
-          <span style={{ fontSize: 11, color: "#555" }}>{d.water_oz || 0}/{TARGETS.water_oz} oz</span>
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 11, color: "#555" }}>{d.water_oz || 0}/{TARGETS.water_oz} oz</span>
+            <SourceBadge sources={["chronometer"]} enabled={enabledSources} />
+          </div>
         </div>
         <div style={{ position: "relative", zIndex: 1, margin: "auto 0", textAlign: "center" }}>
           <div className="tabular-nums" style={{ fontSize: 48, fontWeight: 800, color: "#38BDF8", lineHeight: 1 }}>{d.water_oz ?? 0}</div>
@@ -719,9 +818,9 @@ export function DashboardView() {
         <>
           <div style={{ fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Whoop</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "280px", gap: 14 }}>
-            <WhoopRecoveryCard d={d} spark={s.whoopRecovery} />
-            <WhoopStrainCard d={d} spark={s.whoopStrain} />
-            <WhoopHrvCard d={d} spark={s.whoopHrv} />
+            <WhoopRecoveryCard d={d} spark={s.whoopRecovery} enabledSources={enabledSources} />
+            <WhoopStrainCard d={d} spark={s.whoopStrain} enabledSources={enabledSources} />
+            <WhoopHrvCard d={d} spark={s.whoopHrv} enabledSources={enabledSources} />
           </div>
         </>
       )}
@@ -731,9 +830,9 @@ export function DashboardView() {
         <>
           <div style={{ fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Withings</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "280px", gap: 14 }}>
-            <WithingsWeightCard d={d} spark={s.withingsWeight} />
-            <WithingsBodyCompCard d={d} fatSpark={s.withingsFat} muscleSpark={s.withingsMuscle} />
-            <WithingsMuscleCard d={d} spark={s.withingsMuscle} />
+            <WithingsWeightCard d={d} spark={s.withingsWeight} enabledSources={enabledSources} />
+            <WithingsBodyCompCard d={d} fatSpark={s.withingsFat} muscleSpark={s.withingsMuscle} enabledSources={enabledSources} />
+            <WithingsMuscleCard d={d} spark={s.withingsMuscle} enabledSources={enabledSources} />
           </div>
         </>
       )}
