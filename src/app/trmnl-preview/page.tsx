@@ -1,4 +1,10 @@
+import { getDb } from "@/lib/db";
+
 export default function TrmnlPreview() {
+  const db = getDb();
+  const nameSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'name'").get() as { value: string } | undefined;
+  const name = nameSetting?.value ?? "";
+
   // Sample data matching what gets pushed from the dashboard
   const data = {
     date: new Date().toISOString().slice(0, 10),
@@ -95,7 +101,7 @@ export default function TrmnlPreview() {
           background: "#f8f8f8",
         }}>
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-            Health Dashboard
+            {name ? `${name}'s Health` : "Health Dashboard"}
           </span>
           <span style={{ fontSize: 11, color: "#666" }}>{data.date}</span>
         </div>

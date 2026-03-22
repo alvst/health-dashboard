@@ -1,6 +1,5 @@
 import Database from "better-sqlite3";
 import path from "path";
-import { ALL_SOURCES } from "./sources";
 
 const DB_PATH = path.join(process.cwd(), "health.db");
 
@@ -14,14 +13,6 @@ export function getDb(): Database.Database {
     initTables(_db);
   }
   return _db;
-}
-
-function addColumnIfMissing(db: Database.Database, table: string, column: string, type: string) {
-  try {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-  } catch {
-    // column already exists
-  }
 }
 
 function initTables(db: Database.Database) {
@@ -45,9 +36,21 @@ function initTables(db: Database.Database) {
       oura_workout_calories INTEGER,
       weight_lbs REAL,
       water_oz REAL,
+      avg_hr INTEGER,
+      whoop_workout_calories INTEGER,
       oura_synced_at TEXT,
+      whoop_synced_at TEXT,
       chrono_synced_at TEXT,
+      macrofactor_synced_at TEXT,
       ladder_synced_at TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS whoop_auth (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      access_token TEXT,
+      refresh_token TEXT,
+      expires_at INTEGER,
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -79,14 +82,6 @@ function initTables(db: Database.Database) {
       UNIQUE(marker, test_date)
     );
 
-    CREATE TABLE IF NOT EXISTS whoop_auth (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      access_token TEXT,
-      refresh_token TEXT,
-      expires_at INTEGER,
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
-
     CREATE TABLE IF NOT EXISTS withings_auth (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       access_token TEXT,
@@ -95,34 +90,22 @@ function initTables(db: Database.Database) {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS source_settings (
-      source TEXT PRIMARY KEY,
-      enabled INTEGER NOT NULL DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
+    CREATE TABLE IF NOT EXISTS service_config (
+      service TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT DEFAULT (datetime('now'))
     );
   `);
 
-  // Seed default source rows if missing
-  const insertSource = db.prepare(
-    "INSERT OR IGNORE INTO source_settings (source, enabled) VALUES (?, 1)"
-  );
-  for (const src of ALL_SOURCES) insertSource.run(src);
-
-  addColumnIfMissing(db, "daily_log", "whoop_recovery_score", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_strain", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_hrv", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_rhr", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_sleep_performance", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_sleep_hours", "REAL");
-  addColumnIfMissing(db, "daily_log", "whoop_workout_calories", "INTEGER");
-  addColumnIfMissing(db, "daily_log", "avg_hr", "INTEGER");
-  addColumnIfMissing(db, "daily_log", "whoop_synced_at", "TEXT");
-  addColumnIfMissing(db, "daily_log", "withings_weight_kg", "REAL");
-  addColumnIfMissing(db, "daily_log", "withings_fat_pct", "REAL");
-  addColumnIfMissing(db, "daily_log", "withings_muscle_kg", "REAL");
-  addColumnIfMissing(db, "daily_log", "withings_synced_at", "TEXT");
+  // Migrate existing databases: add new columns if they don't exist
+  const migrations = [
+    "ALTER TABLE daily_log ADD COLUMN avg_hr INTEGER",
+    "ALTER TABLE daily_log ADD COLUMN whoop_workout_calories INTEGER",
+    "ALTER TABLE daily_log ADD COLUMN whoop_synced_at TEXT",
+    "ALTER TABLE daily_log ADD COLUMN macrofactor_synced_at TEXT",
+    "ALTER TABLE daily_log ADD COLUMN withings_synced_at TEXT",
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch { /* column already exists */ }
+  }
 }

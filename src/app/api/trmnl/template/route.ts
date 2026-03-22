@@ -153,7 +153,7 @@ const TEMPLATE = `<style>
 </div>
 
 <div class="title_bar">
-  <span class="title">Health Dashboard</span>
+  <span class="title">{% if name %}{{ name }}'s Health{% else %}Health Dashboard{% endif %}</span>
   <span class="instance">{{ date }}</span>
 </div>`;
 

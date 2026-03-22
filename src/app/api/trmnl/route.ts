@@ -11,7 +11,7 @@ function avg(...vals: (number | null | undefined)[]): number | null {
   return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
 }
 
-function buildVariables(log: Record<string, unknown>, week: Record<string, unknown>[]): Record<string, unknown> {
+function buildVariables(log: Record<string, unknown>, week: Record<string, unknown>[], name?: string): Record<string, unknown> {
   const recovery = avg(
     log.readiness_score as number,
     log.whoop_recovery_score as number
@@ -47,6 +47,7 @@ function buildVariables(log: Record<string, unknown>, week: Record<string, unkno
     water_oz: log.water_oz != null ? Math.round(log.water_oz as number) : null,
     weekly_workouts: weeklyWorkouts,
     avg_daily_steps: avgSteps,
+    name: name ?? null,
   };
 }
 
@@ -67,7 +68,8 @@ export async function POST() {
       return NextResponse.json({ error: "No data for today" }, { status: 404 });
     }
 
-    const variables = buildVariables(log, week);
+    const settings = db.prepare("SELECT value FROM app_settings WHERE key = 'name'").get() as { value: string } | undefined;
+    const variables = buildVariables(log, week, settings?.value);
     await pushToTrmnl(variables);
 
     return NextResponse.json({ ok: true, pushed: variables });

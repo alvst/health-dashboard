@@ -1,51 +1,30 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useSyncStatus, useServices, useDailyLogs, useAppSettings } from "@/lib/hooks/use-health-data";
+import { useState, useCallback, useRef } from "react";
+import { useSyncStatus, useServices } from "@/lib/hooks/use-health-data";
 
 export function SettingsView() {
   const { data: status, mutate: mutateStatus } = useSyncStatus();
   const { data: services, mutate: mutateServices } = useServices();
-  const { mutate: mutateLogs } = useDailyLogs();
-  const { data: appSettings, mutate: mutateAppSettings } = useAppSettings();
   const [syncingOura, setSyncingOura] = useState(false);
   const [syncingWhoop, setSyncingWhoop] = useState(false);
   const [syncingWithings, setSyncingWithings] = useState(false);
   const [syncingChrono, setSyncingChrono] = useState(false);
+  const [uploadingMacro, setUploadingMacro] = useState(false);
   const [syncingLadder, setSyncingLadder] = useState(false);
-  const [pushingTrmnl, setPushingTrmnl] = useState(false);
-  const [seeding, setSeeding] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const trmnlConfigured = !!process.env.NEXT_PUBLIC_TRMNL_CONFIGURED;
-  const [nameInput, setNameInput] = useState(appSettings?.name ?? "");
-  const [savingName, setSavingName] = useState(false);
+  const macroFileRef = useRef<HTMLInputElement>(null);
 
   const isEnabled = (service: string) => !services || services[service] !== false;
 
   const toggleService = useCallback(async (service: string, enabled: boolean) => {
-    await fetch("/api/sources", {
-      method: "PATCH",
+    await fetch("/api/services", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: service, enabled }),
+      body: JSON.stringify({ [service]: enabled }),
     });
     mutateServices();
-    mutateLogs();
-  }, [mutateServices, mutateLogs]);
-
-  const seedTest = useCallback(async (src: string) => {
-    setSeeding(src); setResult(null);
-    try {
-      const res = await fetch("/api/seed-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: src }),
-      });
-      const data = await res.json();
-      setResult(data.error ? data.error : `Loaded ${data.days} days of test data for ${src}`);
-      mutateLogs();
-    } catch { setResult(`Failed to seed ${src} test data`); }
-    finally { setSeeding(null); }
-  }, [mutateLogs]);
+  }, [mutateServices]);
 
   const connectOura = useCallback(() => { window.location.href = "/api/oura-auth"; }, []);
   const connectWhoop = useCallback(() => { window.location.href = "/api/whoop-auth"; }, []);
@@ -57,36 +36,32 @@ export function SettingsView() {
       const res = await fetch("/api/sync-oura", { method: "POST" });
       const data = await res.json();
       setResult(data.error ? `Oura: ${data.error}` : "Oura synced");
-      mutateStatus(); mutateLogs();
+      mutateStatus();
     } catch { setResult("Oura sync failed"); }
     finally { setSyncingOura(false); }
-  }, [mutateStatus, mutateLogs]);
+  }, [mutateStatus]);
 
   const syncWhoop = useCallback(async (days = 3) => {
     setSyncingWhoop(true); setResult(null);
     try {
-      const res = await fetch("/api/sync-whoop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days }),
-      });
+      const res = await fetch("/api/sync-whoop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ days }) });
       const data = await res.json();
       setResult(data.error ? `Whoop: ${data.error}` : `Whoop synced (${data.synced?.length ?? 0} days)`);
-      mutateStatus(); mutateLogs();
+      mutateStatus();
     } catch { setResult("Whoop sync failed"); }
     finally { setSyncingWhoop(false); }
-  }, [mutateStatus, mutateLogs]);
+  }, [mutateStatus]);
 
   const syncWithings = useCallback(async () => {
     setSyncingWithings(true); setResult(null);
     try {
       const res = await fetch("/api/sync-withings", { method: "POST" });
       const data = await res.json();
-      setResult(data.error ? `Withings: ${data.error}` : `Withings synced${data.synced?.length ? ` (${data.synced.length} days)` : ""}`);
-      mutateStatus(); mutateLogs();
+      setResult(data.error ? `Withings: ${data.error}` : `Withings: synced ${data.count} days of weight`);
+      mutateStatus();
     } catch { setResult("Withings sync failed"); }
     finally { setSyncingWithings(false); }
-  }, [mutateStatus, mutateLogs]);
+  }, [mutateStatus]);
 
   const syncChrono = useCallback(async () => {
     setSyncingChrono(true); setResult(null);
@@ -94,31 +69,28 @@ export function SettingsView() {
       const res = await fetch("/api/sync-chrono", { method: "POST" });
       const data = await res.json();
       setResult(data.error ? `Chrono: ${data.error}` : `Chronometer synced${data.data?.water_oz != null ? ` (${data.data.water_oz}oz water)` : ""}`);
-      mutateLogs();
     } catch { setResult("Chronometer sync failed"); }
     finally { setSyncingChrono(false); }
-  }, [mutateLogs]);
-
-  const saveName = useCallback(async (name: string) => {
-    setSavingName(true);
-    await fetch("/api/app-settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    mutateAppSettings();
-    setSavingName(false);
-  }, [mutateAppSettings]);
-
-  const pushTrmnl = useCallback(async () => {
-    setPushingTrmnl(true); setResult(null);
-    try {
-      const res = await fetch("/api/trmnl", { method: "POST" });
-      const data = await res.json();
-      setResult(data.error ? `TRMNL: ${data.error}` : "TRMNL updated");
-    } catch { setResult("TRMNL push failed"); }
-    finally { setPushingTrmnl(false); }
   }, []);
+
+  const uploadMacrofactor = useCallback(async (file: File) => {
+    setUploadingMacro(true); setResult(null);
+    try {
+      const csv = await file.text();
+      const res = await fetch("/api/sync-macrofactor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv }),
+      });
+      const data = await res.json();
+      setResult(data.error ? `Macrofactor: ${data.error}` : `Macrofactor: imported ${data.count} days`);
+      mutateStatus();
+    } catch { setResult("Macrofactor import failed"); }
+    finally {
+      setUploadingMacro(false);
+      if (macroFileRef.current) macroFileRef.current.value = "";
+    }
+  }, [mutateStatus]);
 
   const syncLadder = useCallback(async (mode: "scan" | "rescan") => {
     setSyncingLadder(true); setResult(null);
@@ -133,10 +105,9 @@ export function SettingsView() {
         const msg = count ? `Ladder: ${count} workout${count > 1 ? "s" : ""} ${label}` : `Ladder: no ${mode === "rescan" ? "" : "new "}screenshots`;
         setResult(data.errors?.length ? `${msg} (${data.errors.length} errors)` : msg);
       }
-      mutateLogs();
     } catch { setResult("Ladder sync failed"); }
     finally { setSyncingLadder(false); }
-  }, [mutateLogs]);
+  }, []);
 
   return (
     <div style={{ maxWidth: 520 }} className="space-y-4">
@@ -148,7 +119,11 @@ export function SettingsView() {
       )}
 
       {/* Oura Ring */}
-      <Section title="Oura Ring" enabled={isEnabled("oura")} onToggle={e => toggleService("oura", e)}>
+      <Section
+        title="Oura Ring"
+        enabled={isEnabled("oura")}
+        onToggle={e => toggleService("oura", e)}
+      >
         <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
           Syncs sleep, readiness, steps, and active calories via OAuth.
         </p>
@@ -158,7 +133,7 @@ export function SettingsView() {
             {status?.oura_connected ? "Connected" : "Not connected"}
           </span>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <SettingsButton onClick={connectOura} disabled={!isEnabled("oura")}>
             {status?.oura_connected ? "Reconnect" : "Connect Oura"}
           </SettingsButton>
@@ -167,9 +142,6 @@ export function SettingsView() {
               {syncingOura ? "Syncing..." : "Sync Now"}
             </SettingsButton>
           )}
-          <SettingsButton onClick={() => seedTest("oura")} disabled={seeding === "oura" || !isEnabled("oura")}>
-            {seeding === "oura" ? "Loading..." : "Load Test Data"}
-          </SettingsButton>
         </div>
         {status?.last_oura_sync && (
           <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_oura_sync}</div>
@@ -177,9 +149,13 @@ export function SettingsView() {
       </Section>
 
       {/* Whoop */}
-      <Section title="Whoop" enabled={isEnabled("whoop")} onToggle={e => toggleService("whoop", e)}>
+      <Section
+        title="Whoop"
+        enabled={isEnabled("whoop")}
+        onToggle={e => toggleService("whoop", e)}
+      >
         <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
-          Syncs sleep, recovery score, strain, HRV, and workout calories via OAuth. Whoop limits historical data to the last 30 days.
+          Syncs sleep, recovery score, strain, and workout calories via OAuth. Whoop limits historical data access to the last 30 days.
         </p>
         <div className="flex items-center gap-3 mb-3">
           <Dot on={!!status?.whoop_connected} />
@@ -187,7 +163,7 @@ export function SettingsView() {
             {status?.whoop_connected ? "Connected" : "Not connected"}
           </span>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <SettingsButton onClick={connectWhoop} disabled={!isEnabled("whoop")}>
             {status?.whoop_connected ? "Reconnect" : "Connect Whoop"}
           </SettingsButton>
@@ -199,9 +175,6 @@ export function SettingsView() {
               30-Day Sync
             </SettingsButton>
           </>)}
-          <SettingsButton onClick={() => seedTest("whoop")} disabled={seeding === "whoop" || !isEnabled("whoop")}>
-            {seeding === "whoop" ? "Loading..." : "Load Test Data"}
-          </SettingsButton>
         </div>
         {status?.last_whoop_sync && (
           <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_whoop_sync}</div>
@@ -209,9 +182,13 @@ export function SettingsView() {
       </Section>
 
       {/* Withings */}
-      <Section title="Withings" enabled={isEnabled("withings")} onToggle={e => toggleService("withings", e)}>
+      <Section
+        title="Withings"
+        enabled={isEnabled("withings")}
+        onToggle={e => toggleService("withings", e)}
+      >
         <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
-          Syncs weight, body fat, and muscle mass from Withings smart scales via OAuth.
+          Syncs weight from Withings smart scales via OAuth.
         </p>
         <div className="flex items-center gap-3 mb-3">
           <Dot on={!!status?.withings_connected} />
@@ -219,7 +196,7 @@ export function SettingsView() {
             {status?.withings_connected ? "Connected" : "Not connected"}
           </span>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <SettingsButton onClick={connectWithings} disabled={!isEnabled("withings")}>
             {status?.withings_connected ? "Reconnect" : "Connect Withings"}
           </SettingsButton>
@@ -228,9 +205,6 @@ export function SettingsView() {
               {syncingWithings ? "Syncing..." : "Sync Now"}
             </SettingsButton>
           )}
-          <SettingsButton onClick={() => seedTest("withings")} disabled={seeding === "withings" || !isEnabled("withings")}>
-            {seeding === "withings" ? "Loading..." : "Load Test Data"}
-          </SettingsButton>
         </div>
         {status?.last_withings_sync && (
           <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_withings_sync}</div>
@@ -238,16 +212,17 @@ export function SettingsView() {
       </Section>
 
       {/* Chronometer */}
-      <Section title="Chronometer" enabled={isEnabled("chronometer")} onToggle={e => toggleService("chronometer", e)}>
+      <Section
+        title="Chronometer"
+        enabled={isEnabled("chronometer")}
+        onToggle={e => toggleService("chronometer", e)}
+      >
         <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
           Scrapes food calories, macros, and water intake using your login credentials.
         </p>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <SettingsButton onClick={syncChrono} disabled={syncingChrono || !isEnabled("chronometer")}>
             {syncingChrono ? "Scraping..." : "Sync Now"}
-          </SettingsButton>
-          <SettingsButton onClick={() => seedTest("chronometer")} disabled={seeding === "chronometer" || !isEnabled("chronometer")}>
-            {seeding === "chronometer" ? "Loading..." : "Load Test Data"}
           </SettingsButton>
         </div>
         {status?.last_chrono_sync && (
@@ -255,8 +230,41 @@ export function SettingsView() {
         )}
       </Section>
 
+      {/* Macrofactor */}
+      <Section
+        title="Macrofactor"
+        enabled={isEnabled("macrofactor")}
+        onToggle={e => toggleService("macrofactor", e)}
+      >
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Import food diary from a Macrofactor CSV export (Settings &rarr; Export Data in the app).
+        </p>
+        <input
+          ref={macroFileRef}
+          type="file"
+          accept=".csv"
+          style={{ display: "none" }}
+          onChange={e => {
+            const file = e.target.files?.[0];
+            if (file) uploadMacrofactor(file);
+          }}
+        />
+        <div className="flex gap-2">
+          <SettingsButton onClick={() => macroFileRef.current?.click()} disabled={uploadingMacro || !isEnabled("macrofactor")}>
+            {uploadingMacro ? "Importing..." : "Upload CSV"}
+          </SettingsButton>
+        </div>
+        {status?.last_macrofactor_sync && (
+          <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last import: {status.last_macrofactor_sync}</div>
+        )}
+      </Section>
+
       {/* Ladder */}
-      <Section title="Ladder" enabled={isEnabled("ladder")} onToggle={e => toggleService("ladder", e)}>
+      <Section
+        title="Ladder"
+        enabled={isEnabled("ladder")}
+        onToggle={e => toggleService("ladder", e)}
+      >
         <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
           Scans workout screenshots from iCloud &rarr; Workout Pics folder.{" "}
           {process.env.NEXT_PUBLIC_GEMINI_CONFIGURED === "1"
@@ -264,84 +272,18 @@ export function SettingsView() {
             : <span style={{ color: "var(--text-muted)" }}>Using Tesseract OCR (add GEMINI_API_KEY for better results)</span>
           }
         </p>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <SettingsButton onClick={() => syncLadder("scan")} disabled={syncingLadder || !isEnabled("ladder")}>
             {syncingLadder ? "Scanning..." : "Sync New"}
           </SettingsButton>
           <SettingsButton onClick={() => syncLadder("rescan")} disabled={syncingLadder || !isEnabled("ladder")}>
             Reprocess All
           </SettingsButton>
-          <SettingsButton onClick={() => seedTest("ladder")} disabled={seeding === "ladder" || !isEnabled("ladder")}>
-            {seeding === "ladder" ? "Loading..." : "Load Test Data"}
-          </SettingsButton>
         </div>
         {status?.last_ladder_sync && (
           <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_ladder_sync}</div>
         )}
       </Section>
-
-      {/* Personalization */}
-      <div className="rounded-lg p-4" style={{ background: "var(--bg-primary)", border: "1px solid var(--border-color)" }}>
-        <div className="text-[10px] uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>Personalization</div>
-        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
-          Your name appears on the TRMNL display and dashboard greeting.
-        </p>
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            placeholder="Your name"
-            style={{
-              background: "var(--bg-tertiary)",
-              border: "1px solid var(--border-color)",
-              color: "var(--text-primary)",
-              fontSize: 13,
-              fontFamily: "inherit",
-              padding: "0.35rem 0.7rem",
-              borderRadius: 4,
-              outline: "none",
-              width: 200,
-            }}
-          />
-          <SettingsButton onClick={() => saveName(nameInput)} disabled={savingName || nameInput === (appSettings?.name ?? "")}>
-            {savingName ? "Saving..." : "Save"}
-          </SettingsButton>
-        </div>
-      </div>
-
-      {/* TRMNL */}
-      <div className="rounded-lg p-4" style={{ background: "var(--bg-primary)", border: "1px solid var(--border-color)" }}>
-        <div className="text-[10px] uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>TRMNL E-Ink Display</div>
-        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
-          Pushes today&apos;s health metrics to your TRMNL device after each sync.
-          Set <code style={{ fontSize: 11 }}>TRMNL_PLUGIN_UUID</code> in <code style={{ fontSize: 11 }}>.env</code> to enable.
-        </p>
-        <div className="flex items-center gap-3 mb-3">
-          <Dot on={trmnlConfigured} />
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-            {trmnlConfigured ? "Configured" : "Not configured"}
-          </span>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {trmnlConfigured && (
-            <SettingsButton onClick={pushTrmnl} disabled={pushingTrmnl}>
-              {pushingTrmnl ? "Pushing..." : "Push Now"}
-            </SettingsButton>
-          )}
-          <SettingsButton onClick={() => window.open("/api/trmnl/template", "_blank")}>
-            View Template
-          </SettingsButton>
-        </div>
-        {!trmnlConfigured && (
-          <div className="mt-3 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-            1. Create a Private Plugin at trmnl.com with Webhook strategy<br />
-            2. Copy the plugin UUID from the Webhook URL<br />
-            3. Add <code style={{ fontSize: 11 }}>TRMNL_PLUGIN_UUID=your-uuid</code> and <code style={{ fontSize: 11 }}>NEXT_PUBLIC_TRMNL_CONFIGURED=1</code> to .env<br />
-            4. Paste the template (View Template button) into your plugin&apos;s markup field
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -354,22 +296,12 @@ function Section({ title, enabled, onToggle, children }: {
   title: string; enabled: boolean; onToggle: (v: boolean) => void; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg p-4" style={{
-      background: "var(--bg-primary)",
-      border: "1px solid var(--border-color)",
-      opacity: enabled ? 1 : 0.5,
-      transition: "opacity 0.2s",
-    }}>
+    <div className="rounded-lg p-4" style={{ background: "var(--bg-primary)", border: "1px solid var(--border-color)", opacity: enabled ? 1 : 0.5, transition: "opacity 0.2s" }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{title}</div>
         <Toggle enabled={enabled} onChange={onToggle} />
       </div>
       {enabled && children}
-      {!enabled && (
-        <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Source disabled — data hidden from dashboard
-        </div>
-      )}
     </div>
   );
 }
@@ -389,7 +321,6 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
         transition: "background 0.2s",
         flexShrink: 0,
       }}
-      aria-label={enabled ? "Disable source" : "Enable source"}
     >
       <span style={{
         position: "absolute",
