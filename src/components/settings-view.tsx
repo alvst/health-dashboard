@@ -12,8 +12,10 @@ export function SettingsView() {
   const [syncingWithings, setSyncingWithings] = useState(false);
   const [syncingChrono, setSyncingChrono] = useState(false);
   const [syncingLadder, setSyncingLadder] = useState(false);
+  const [pushingTrmnl, setPushingTrmnl] = useState(false);
   const [seeding, setSeeding] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const trmnlConfigured = !!process.env.NEXT_PUBLIC_TRMNL_CONFIGURED;
 
   const isEnabled = (service: string) => !services || services[service] !== false;
 
@@ -93,6 +95,16 @@ export function SettingsView() {
     } catch { setResult("Chronometer sync failed"); }
     finally { setSyncingChrono(false); }
   }, [mutateLogs]);
+
+  const pushTrmnl = useCallback(async () => {
+    setPushingTrmnl(true); setResult(null);
+    try {
+      const res = await fetch("/api/trmnl", { method: "POST" });
+      const data = await res.json();
+      setResult(data.error ? `TRMNL: ${data.error}` : "TRMNL updated");
+    } catch { setResult("TRMNL push failed"); }
+    finally { setPushingTrmnl(false); }
+  }, []);
 
   const syncLadder = useCallback(async (mode: "scan" | "rescan") => {
     setSyncingLadder(true); setResult(null);
@@ -253,6 +265,39 @@ export function SettingsView() {
           <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>Last sync: {status.last_ladder_sync}</div>
         )}
       </Section>
+
+      {/* TRMNL */}
+      <div className="rounded-lg p-4" style={{ background: "var(--bg-primary)", border: "1px solid var(--border-color)" }}>
+        <div className="text-[10px] uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>TRMNL E-Ink Display</div>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
+          Pushes today&apos;s health metrics to your TRMNL device after each sync.
+          Set <code style={{ fontSize: 11 }}>TRMNL_PLUGIN_UUID</code> in <code style={{ fontSize: 11 }}>.env</code> to enable.
+        </p>
+        <div className="flex items-center gap-3 mb-3">
+          <Dot on={trmnlConfigured} />
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            {trmnlConfigured ? "Configured" : "Not configured"}
+          </span>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {trmnlConfigured && (
+            <SettingsButton onClick={pushTrmnl} disabled={pushingTrmnl}>
+              {pushingTrmnl ? "Pushing..." : "Push Now"}
+            </SettingsButton>
+          )}
+          <SettingsButton onClick={() => window.open("/api/trmnl/template", "_blank")}>
+            View Template
+          </SettingsButton>
+        </div>
+        {!trmnlConfigured && (
+          <div className="mt-3 text-[11px]" style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+            1. Create a Private Plugin at trmnl.com with Webhook strategy<br />
+            2. Copy the plugin UUID from the Webhook URL<br />
+            3. Add <code style={{ fontSize: 11 }}>TRMNL_PLUGIN_UUID=your-uuid</code> and <code style={{ fontSize: 11 }}>NEXT_PUBLIC_TRMNL_CONFIGURED=1</code> to .env<br />
+            4. Paste the template (View Template button) into your plugin&apos;s markup field
+          </div>
+        )}
+      </div>
     </div>
   );
 }
